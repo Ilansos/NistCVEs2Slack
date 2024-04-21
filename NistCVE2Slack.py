@@ -97,7 +97,9 @@ def fetch_cves(severity_levels, pub_start_date, pub_end_date):
                 logger.error(f"Failed to retrieve {severity} severity CVEs: {response.status_code}")
                 logger.error("Response:", response.text)
 
-
+    logger.info(f"Number of critical CVEs: {len(cves_critical)}")
+    logger.info(f"Number of high CVEs: {len(cves_high)}")
+    logger.info(f"Number of medium CVEs: {len(cves_medium)}")
     return cves_medium, cves_high, cves_critical
 
 
