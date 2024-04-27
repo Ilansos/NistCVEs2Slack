@@ -4,6 +4,8 @@ import logging
 import json
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+import os
+
 
 logging.basicConfig(filename='nist2slack.log', 
                     filemode='a', 
@@ -12,17 +14,10 @@ logging.basicConfig(filename='nist2slack.log',
 # Get the logger instance
 logger = logging.getLogger(__name__)
 
-def read_config(filename):
-    try:
-        with open(filename, 'r') as config_file:
-            config = json.load(config_file)
-        return config
-    except FileNotFoundError:
-        logging.error(f"Config file '{filename}' not found.")
-        return None
-    except json.JSONDecodeError:
-        logging.error(f"Error decoding JSON file: {filename}")
-        return None
+slack_api_key = os.getenv('SLACK_API_KEY')
+channel_id = os.getenv('CHANNEL_ID')
+image_url = os.getenv('IMAGE_URL')
+
 
 def response_parsing(data):
     vulnerabilities = data.get("vulnerabilities")
@@ -104,8 +99,6 @@ def fetch_cves(severity_levels, pub_start_date, pub_end_date):
 
 
 def create_slack_message(cve_info, severity):
-    config = read_config("config.json")
-    image_url = config.get("image_url")
     # Map severity to emojis for visual representation
     severity_emojis = {
         'MEDIUM': ':large_yellow_circle:',
@@ -152,26 +145,55 @@ def create_slack_message(cve_info, severity):
     ]
     return text_summary, blocks
 
-def send_cve_notifications(cves, severity, client):
-    config = read_config("config.json")
-    channel_id = config.get("channel_id")
+def create_slack_message_for_no_new_cves():
+    text_summary = f":large_green_circle: No new CVEs in the last 24 hours"  # Summary for notifications
+    
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f":large_green_circle: No new CVEs in the last 24 hours\n"
+                )
+            },
+            "accessory": {
+                "type": "image",
+                "image_url": image_url,
+                "alt_text": "CVE details"
+            }
+        },
+        {
+            "type": "divider"
+        }
+    ]
+    return text_summary, blocks
+
+def send_cve_notifications(client, cves, severity):
     try:
-        for cve in cves:
-            text_summary, message_blocks = create_slack_message(cve, severity)
+        if not cves and not severity:
+            text_summary, message_blocks = create_slack_message_for_no_new_cves()
             response = client.chat_postMessage(
                 channel=channel_id, 
                 text=text_summary,  # Fallback text for notifications
                 blocks=json.dumps(message_blocks)
             )
             logger.info("successfully posted CVE into Slack channel")
+        else:
+            for cve in cves:
+                text_summary, message_blocks = create_slack_message(cve, severity)
+                response = client.chat_postMessage(
+                    channel=channel_id, 
+                    text=text_summary,  # Fallback text for notifications
+                    blocks=json.dumps(message_blocks)
+                )
+                logger.info("successfully posted CVE into Slack channel")
 
     except SlackApiError as e:
         logger.error(f"Error posting to Slack: {e}")
        
 
 def main():
-    config = read_config("config.json")
-    slack_api_key = config.get("slack_api_key")
     # Define the time range for the last 24 hours
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=1)
@@ -185,10 +207,12 @@ def main():
     # Slack client initialization
     client = WebClient(token=slack_api_key)
 
-
-    send_cve_notifications(cves_medium, 'MEDIUM', client)
-    send_cve_notifications(cves_high, 'HIGH', client)
-    send_cve_notifications(cves_critical, 'CRITICAL', client)
+    if not cves_medium and not cves_high and not cves_critical:
+        send_cve_notifications(client, cves=None, severity=None)
+    else:
+        send_cve_notifications(client, cves_medium, 'MEDIUM')
+        send_cve_notifications(client, cves_high, 'HIGH')
+        send_cve_notifications(client, cves_critical, 'CRITICAL')
 
 if __name__ == "__main__":
     main()
