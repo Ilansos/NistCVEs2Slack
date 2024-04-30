@@ -5,13 +5,12 @@ import json
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 import os
+import sys
 
-
-logging.basicConfig(filename='nist2slack.log', 
-                    filemode='a', 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-# Get the logger instance
+# Configure logging
+logging.basicConfig(stream=sys.stdout, 
+                    level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 slack_api_key = os.getenv('SLACK_API_KEY')
@@ -79,6 +78,7 @@ def fetch_cves(severity_levels, pub_start_date, pub_end_date):
         # Send the request
         with requests.Session() as session:
             response = session.send(prepared)
+            logger.info(f"Response status code: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
                 cves_information = response_parsing(data)

@@ -1,4 +1,0 @@
-# Run the script once a day at midnight (UTC)
-0 0 * * * cd /app && python nist2slack.py >> /var/log/cron.log 2>&1
-0 3 * * 0 > /app/nist2slack.log
-# Don't forget the empty line at the end of the file

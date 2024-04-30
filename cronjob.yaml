@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: nist2slack-cronjob
+spec:
+    schedule: "0 3 * * *" # Run once a day at 3AM 
+    jobTemplate:
+        spec:
+            template:
+                metadata:
+                    labels:
+                        app: nist2slack
+                spec:
+                    containers:
+                    - name: nist2slack
+                      image: localhost:32000/nist2slack:v1
+                      command: ["python", "NistCVE2Slack.py"]
+                      env:
+                      - name: SLACK_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: nist2slack-secrets
+                                key: SLACK_API_KEY
+                      - name: CHANNEL_ID
+                        valueFrom:
+                            secretKeyRef:
+                                name: nist2slack-secrets
+                                key: CHANNEL_ID
+                      - name: IMAGE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: nist2slack-secrets
+                                key: IMAGE_URL
+                    restartPolicy: OnFailure

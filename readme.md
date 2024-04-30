@@ -1,6 +1,18 @@
-# CVE Notification System
+# NistCVE2Slack: CVE Notification System
 
-This Python script automates the process of fetching recent cybersecurity vulnerabilities from the National Vulnerability Database (NVD) and posting them into a Slack channel using a MicroK8s deployment with Docker. This documentation covers the entire setup, configuration, and usage of the script in a Kubernetes environment.
+This Python script automates the process of fetching recent cybersecurity vulnerabilities from the National Vulnerability Database (NVD) and posting them into a Slack channel.
+
+## How It Works
+
+The script is designed to run once a day as a Kubernetes CronJob, ensuring that it fetches and delivers up-to-date information about new vulnerabilities in a timely manner. Here's how it operates:
+
+  1- Kubernetes CronJob Setup: The script is deployed to a Kubernetes cluster, which is configured to trigger its execution daily using a CronJob. This automates the process, minimizing manual intervention and ensuring daily updates.
+
+  2- Fetching CVEs: When triggered, the script queries the NIST API for CVEs reported within the last 24 hours, categorized by severity levels such as "Medium," "High," and "Critical."
+
+  3- Slack Notification: The script formats the CVE information and posts it into a specified Slack channel, making the information easily accessible to the team for quick review and action.
+
+  4- Logs: Logging is integrated into the script to track its execution, including API response statuses, any CVEs found, and the success or failure of sending notifications to Slack.
 
 ## System Requirements
 
@@ -33,7 +45,7 @@ To use this script, you need to create a Slack bot and configure it with appropr
 #### Extracting the Channel ID
 
     Navigate to Slack: Open your Slack workspace.
-    Find Your Channel: Go to the channel where you want notifications.
+    Find Your Channel: Go to the channel where you want notifications.sud
     Open Channel Details: Click on the channel name at the top to view details.
     Locate the Channel ID: Usually found in the URL or under "More" in the channel details.
 
@@ -68,7 +80,7 @@ Enable necessary MicroK8s addons, including DNS and the registry:
 sudo microk8s enable dns registry
 ```
 
-## Create a Local Docker Registry
+## Using the Local Docker Registry
 
 MicroK8s includes a built-in Docker registry where you can push your images. It is available at localhost:32000. Use this registry to manage local images.
 Create Docker Image
@@ -85,18 +97,32 @@ docker build -t localhost:32000/nist2slack:v1 .
 docker push localhost:32000/nist2slack:v1
 ```
 
-## Kubernetes Deployment Configuration
+## Creating Kubernetes Secrets
 
-Environmental variables are set directly in the deployment.yaml file. Modify the following section with your actual values:
+To manage sensitive information securely, store it as Kubernetes Secrets:
 
+  1- Base64 Encode the Values:Before creating the secrets, encode the values you want to store in Base64 format. For example:
+```bash
+echo -n "YOUR SLACK API KEY" | base64
+echo -n "YOUR CHANNEL ID" | base64
+echo -n "YOUR IMAGE URL" | base64
+```
+
+  2- Define the Secret in the secrets.yaml File replacing the placeholders with the actual Base64-encoded strings:
 ```yaml
-env:
-- name: SLACK_API_KEY
-  value: "YOUR SLACK API KEY"
-- name: CHANNEL_ID
-  value: "YOUR CHANNEL ID"
-- name: IMAGE_URL
-  value: "YOUR IMAGE ID"
+apiVersion: v1
+kind: Secret
+metadata:
+    name: nist2slack-secrets
+data:
+    SLACK_API_KEY: "BASE64_ENCODED_SLACK_API_KEY"
+    CHANNEL_ID: "BASE64_ENCODED_CHANNEL_ID"
+    IMAGE_URL: "BASE64_ENCODED_IMAGE_URL"
+```  
+
+  3- Apply the Secret to the Kubernetes Cluster:
+```bash
+microk8s kubectl apply -f secrets.yaml
 ```
 
 ## Deploy the Script
@@ -104,24 +130,30 @@ env:
 Deploy your application to MicroK8s by applying the Kubernetes deployment file:
 
 ```bash
-microk8s kubectl apply -f deployment.yaml
+microk8s kubectl apply -f cronjob.yaml
 ```
-### Verify the Deployment
+### Verify the CronJob Deployment
 
-Check the status of your deployment:
+Check the status of your CronJob:
 ```bash
-microk8s kubectl get all
+microk8s kubectl get cronjobs
 ```
 
-Ensure that the pods are running without issues:
+Find the last job:
+```bash
+microk8s kubectl get jobs
+```
+
+Find the pod executed by the job:
+``` bash
+kubectl get pods --selector=job-name=<last-job>
+```
+
+View logs of the last executed pod:
 
 ```bash
-microk8s kubectl logs -f <pod-name>
+microk8s kubectl logs <pod-name>
 ```
-
-## Automating the Script with Cron Job
-
-This is handled within the Docker container using a cron job as defined in the Dockerfile and crontab.
 
 ## License
 
